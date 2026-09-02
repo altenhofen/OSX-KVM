@@ -11,6 +11,17 @@ die() {
   exit 1
 }
 
+ensure_default_network() {
+  sudo virsh -c qemu:///system net-info default >/dev/null 2>&1 ||
+    die "libvirt network 'default' is not defined; run install-osx-kvm-libvirt"
+
+  sudo virsh -c qemu:///system net-autostart default >/dev/null
+  if ! sudo virsh -c qemu:///system net-list --name | grep -Fxq default; then
+    printf 'Starting libvirt default NAT network.\n'
+    sudo virsh -c qemu:///system net-start default
+  fi
+}
+
 [[ ${EUID} -ne 0 ]] || die 'run this as your normal user'
 command -v virsh >/dev/null || die 'libvirt/virsh is required'
 command -v pgrep >/dev/null || die 'procps/pgrep is required'
@@ -37,10 +48,13 @@ if [[ $graphical_session -eq 1 ]]; then
   read -r -p 'Continue? [y/N] ' answer
   [[ "$answer" =~ ^[Yy]$ ]] || exit 0
 
+  ensure_default_network
+
   # Run the client outside the graphical user session. The terminal may be
   # killed when SDDM stops, but this system unit continues starting the VM.
   exec sudo systemd-run --unit="osx-kvm-start-$(date +%s)" --collect --no-block \
     /usr/bin/virsh -c qemu:///system start "$DOMAIN_NAME"
 fi
 
-exec virsh -c qemu:///system start "$DOMAIN_NAME"
+ensure_default_network
+exec sudo virsh -c qemu:///system start "$DOMAIN_NAME"

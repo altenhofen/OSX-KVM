@@ -24,12 +24,25 @@ die() {
   exit 1
 }
 
+ensure_default_network() {
+  sudo virsh -c qemu:///system net-info default >/dev/null 2>&1 ||
+    die "libvirt network 'default' is not defined; run install-osx-kvm-libvirt"
+
+  sudo virsh -c qemu:///system net-autostart default >/dev/null
+  if ! sudo virsh -c qemu:///system net-list --name | grep -Fxq default; then
+    printf 'Starting libvirt default NAT network.\n'
+    sudo virsh -c qemu:///system net-start default
+  fi
+}
+
 [[ ${EUID} -ne 0 ]] || die 'run this as your normal user; it invokes sudo'
 command -v xsltproc >/dev/null || die 'xsltproc is required'
 command -v virt-xml-validate >/dev/null || die 'virt-xml-validate is required'
 command -v gvncviewer >/dev/null || die 'gvncviewer is required'
 [[ -r "$SOURCE_XML" && -r "$TRANSFORM" && -r "$VARS_TEMPLATE" ]] ||
   die 'missing no-GPU test files'
+
+ensure_default_network
 
 state=$(sudo virsh -c qemu:///system domstate "$PASSTHROUGH_DOMAIN" 2>/dev/null || true)
 [[ "$state" == 'shut off' ]] ||
