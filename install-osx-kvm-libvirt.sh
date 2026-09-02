@@ -13,7 +13,9 @@ readonly HOOK_DIR=/etc/libvirt/hooks/qemu.d
 readonly PREPARE_HOOK_PATH="$HOOK_DIR/90-osx-kvm-prepare"
 readonly RELEASE_HOOK_PATH="$HOOK_DIR/91-osx-kvm-release"
 readonly LEGACY_HOOK_DIR="$HOOK_DIR/$DOMAIN_NAME"
+readonly QEMU_CONFIG=/etc/libvirt/qemu.conf
 TEMP_XML=
+QEMU_UID=
 
 die() {
   printf 'error: %s\n' "$*" >&2
@@ -35,7 +37,27 @@ trap cleanup EXIT
 command -v sudo >/dev/null || die 'sudo is required'
 command -v virsh >/dev/null || die 'libvirt/virsh is required'
 command -v setfacl >/dev/null || die 'setfacl is required; install the Arch acl package first with: omarchy pkg add acl'
-getent passwd qemu >/dev/null || die 'the system libvirt qemu user is missing'
+
+# Resolve the identity used by the system libvirt QEMU driver. Arch systems
+# commonly use libvirt-qemu, while some installations use qemu instead.
+configured_qemu_user=
+if [[ -r "$QEMU_CONFIG" ]]; then
+  configured_qemu_user=$(sed -nE \
+    's/^[[:space:]]*user[[:space:]]*=[[:space:]]*["'"'"']([^"'"'"']+)["'"'"'][[:space:]]*$/\1/p' \
+    "$QEMU_CONFIG" | head -n1)
+fi
+if [[ "$configured_qemu_user" =~ ^\+[0-9]+$ ]]; then
+  QEMU_UID=${configured_qemu_user#+}
+elif [[ -n "$configured_qemu_user" ]] && QEMU_UID=$(id -u "$configured_qemu_user" 2>/dev/null); then
+  :
+else
+  for candidate in libvirt-qemu qemu; do
+    if QEMU_UID=$(id -u "$candidate" 2>/dev/null); then
+      break
+    fi
+  done
+fi
+[[ -n "$QEMU_UID" ]] || die 'could not determine the system libvirt QEMU user'
 
 sudo -v
 
@@ -66,12 +88,21 @@ fi
 
 # System libvirt runs QEMU as qemu. Grant it only the traversal/read/write
 # access needed for these existing VM files; no files are copied or removed.
-sudo setfacl -m u:qemu:--x "$HOME"
-sudo setfacl -m u:qemu:r-x "$REPO_DIR" "$REPO_DIR/OpenCore"
-sudo setfacl -m u:qemu:r-- "$REPO_DIR/OVMF_CODE_4M.fd" \
+sudo setfacl -m "u:$QEMU_UID:--x" "$HOME"
+sudo setfacl -m "u:$QEMU_UID:r-x" "$REPO_DIR" "$REPO_DIR/OpenCore"
+sudo setfacl -m "u:$QEMU_UID:r--" "$REPO_DIR/OVMF_CODE_4M.fd" \
   "$REPO_DIR/OpenCore/OpenCore.qcow2"
-sudo setfacl -m u:qemu:rw- "$REPO_DIR/OVMF_VARS-1920x1080.fd" \
+sudo setfacl -m "u:$QEMU_UID:rw-" "$REPO_DIR/OVMF_VARS-1920x1080.fd" \
   "$REPO_DIR/mac_hdd_ng.img"
+
+sudo -u "#$QEMU_UID" -- test -r "$REPO_DIR/OVMF_CODE_4M.fd" ||
+  die "libvirt QEMU UID $QEMU_UID cannot read OVMF_CODE_4M.fd"
+sudo -u "#$QEMU_UID" -- test -r "$REPO_DIR/OpenCore/OpenCore.qcow2" ||
+  die "libvirt QEMU UID $QEMU_UID cannot read OpenCore.qcow2"
+sudo -u "#$QEMU_UID" -- test -r "$REPO_DIR/mac_hdd_ng.img" ||
+  die "libvirt QEMU UID $QEMU_UID cannot read mac_hdd_ng.img"
+sudo -u "#$QEMU_UID" -- test -w "$REPO_DIR/mac_hdd_ng.img" ||
+  die "libvirt QEMU UID $QEMU_UID cannot write mac_hdd_ng.img"
 
 # A first define gives libvirt a UUID. Preserve it when redefining the
 # existing domain, otherwise libvirt interprets the XML as a second domain

@@ -44,7 +44,8 @@ prepare-osx-kvm
 install-osx-kvm-libvirt
 ```
 
-The installer enables and starts libvirt's `default` NAT network, then defines
+The installer detects the system libvirt QEMU identity, grants it access to
+the VM files, enables and starts libvirt's `default` NAT network, then defines
 the `osx-kvm` domain but does not start the VM.
 
 ## Start and stop
