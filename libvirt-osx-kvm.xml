@@ -53,7 +53,6 @@
       <driver name='qemu' type='qcow2' cache='none' io='native' iothread='1'/>
       <source file='/home/altenhofen/OSX-KVM/OpenCore/OpenCore.qcow2'/>
       <target dev='sda' bus='sata'/>
-      <readonly/>
       <address type='drive' controller='0' bus='0' unit='2'/>
     </disk>
     <disk type='file' device='disk'>
