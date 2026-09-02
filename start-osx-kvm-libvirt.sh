@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 # Start the already-defined libvirt VM. Its libvirt hooks stop SDDM before
-# detaching the RX 5600 and restart SDDM after the VM exits.
+# libvirt detaches the RX 5600 and restart SDDM after the VM exits.
 
 readonly DOMAIN_NAME=osx-kvm
 
@@ -15,8 +15,8 @@ die() {
 command -v virsh >/dev/null || die 'libvirt/virsh is required'
 command -v pgrep >/dev/null || die 'procps/pgrep is required'
 
-readonly PREPARE_HOOK=/etc/libvirt/hooks/qemu.d/osx-kvm/prepare/begin
-readonly RELEASE_HOOK=/etc/libvirt/hooks/qemu.d/osx-kvm/release/end
+readonly PREPARE_HOOK=/etc/libvirt/hooks/qemu.d/90-osx-kvm-prepare
+readonly RELEASE_HOOK=/etc/libvirt/hooks/qemu.d/91-osx-kvm-release
 [[ -x "$PREPARE_HOOK" && -x "$RELEASE_HOOK" ]] ||
   die 'automatic lifecycle hooks are not installed; run install-osx-kvm-libvirt first'
 

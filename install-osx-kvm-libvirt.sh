@@ -9,6 +9,10 @@ readonly XML_FILE="$REPO_DIR/libvirt-osx-kvm.xml"
 readonly PREPARE_HOOK="$REPO_DIR/libvirt-osx-kvm-prepare-hook"
 readonly RELEASE_HOOK="$REPO_DIR/libvirt-osx-kvm-release-hook"
 readonly DOMAIN_NAME=osx-kvm
+readonly HOOK_DIR=/etc/libvirt/hooks/qemu.d
+readonly PREPARE_HOOK_PATH="$HOOK_DIR/90-osx-kvm-prepare"
+readonly RELEASE_HOOK_PATH="$HOOK_DIR/91-osx-kvm-release"
+readonly LEGACY_HOOK_DIR="$HOOK_DIR/$DOMAIN_NAME"
 TEMP_XML=
 
 die() {
@@ -34,7 +38,24 @@ command -v setfacl >/dev/null || die 'setfacl is required; install the Arch acl 
 getent passwd qemu >/dev/null || die 'the system libvirt qemu user is missing'
 
 sudo -v
-sudo systemctl enable --now libvirtd.service
+
+# qemu.d contains flat executable hook scripts. The old nested layout was
+# interpreted by libvirt as a non-executable hook named "osx-kvm".
+sudo install -d -m755 "$HOOK_DIR"
+sudo install -Dm755 "$PREPARE_HOOK" "$PREPARE_HOOK_PATH"
+sudo install -Dm755 "$RELEASE_HOOK" "$RELEASE_HOOK_PATH"
+if [[ -d "$LEGACY_HOOK_DIR" ]]; then
+  sudo rm -f -- "$LEGACY_HOOK_DIR/prepare/begin" "$LEGACY_HOOK_DIR/release/end"
+  sudo rmdir --ignore-fail-on-non-empty \
+    "$LEGACY_HOOK_DIR/prepare" "$LEGACY_HOOK_DIR/release" "$LEGACY_HOOK_DIR" || true
+fi
+
+if sudo systemctl is-active --quiet libvirtd.service; then
+  # libvirt reads qemu.d only when its daemon starts.
+  sudo systemctl restart libvirtd.service
+else
+  sudo systemctl enable --now libvirtd.service
+fi
 
 # System libvirt runs QEMU as qemu. Grant it only the traversal/read/write
 # access needed for these existing VM files; no files are copied or removed.
@@ -44,11 +65,6 @@ sudo setfacl -m u:qemu:r-- "$REPO_DIR/OVMF_CODE_4M.fd" \
   "$REPO_DIR/OpenCore/OpenCore.qcow2"
 sudo setfacl -m u:qemu:rw- "$REPO_DIR/OVMF_VARS-1920x1080.fd" \
   "$REPO_DIR/mac_hdd_ng.img"
-
-sudo install -Dm755 "$PREPARE_HOOK" \
-  /etc/libvirt/hooks/qemu.d/$DOMAIN_NAME/prepare/begin
-sudo install -Dm755 "$RELEASE_HOOK" \
-  /etc/libvirt/hooks/qemu.d/$DOMAIN_NAME/release/end
 
 # A first define gives libvirt a UUID. Preserve it when redefining the
 # existing domain, otherwise libvirt interprets the XML as a second domain

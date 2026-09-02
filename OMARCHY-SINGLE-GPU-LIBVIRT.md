@@ -9,7 +9,7 @@ Host devices:
 - HDMI audio: `0000:09:00.1`
 - USB 3 controller: `0000:00:14.0` (IOMMU group 42)
 
-The two devices are detached and reattached by libvirt hooks. SDDM is stopped
+The three host devices are detached and reattached by libvirt. SDDM is stopped
 before the handoff and restarted after the VM exits. Linux is expected to be
 headless while macOS owns the physical GPU. The physical USB 3 controller is
 also assigned, so its attached keyboard, mouse, wireless receiver, USB audio,
@@ -54,7 +54,8 @@ start-osx-kvm-libvirt
 
 Starting from the desktop asks for confirmation, then runs the libvirt client
 outside the graphical session so it survives SDDM stopping. Shut down macOS
-normally. The release hook reattaches both PCI functions and starts SDDM.
+normally. Libvirt reattaches the managed devices, then the release hook starts
+SDDM.
 
 Useful checks:
 

@@ -2,15 +2,12 @@
 set -Eeuo pipefail
 
 # Automatic single-GPU handoff for the osx-kvm domain.
-# libvirt calls this as: qemu osx-kvm prepare begin
+# libvirt calls this qemu.d script as: qemu osx-kvm prepare begin
 # This intentionally affects only the VM named osx-kvm.
 
 if [[ "${1:-}" != "osx-kvm" || "${2:-}" != "prepare" || "${3:-}" != "begin" ]]; then
   exit 0
 fi
-
-readonly VIRSH=(/usr/bin/virsh -c qemu:///system)
-readonly NODES=(pci_0000_09_00_0 pci_0000_09_00_1 pci_0000_00_14_0)
 
 echo "osx-kvm: stopping SDDM before RX 5600 handoff" >&2
 /usr/bin/systemctl stop sddm.service
@@ -38,19 +35,4 @@ for proc in Hyprland sddm sddm-helper start-hyprland; do
 done
 
 /usr/bin/modprobe vfio-pci
-detached=()
-for node in "${NODES[@]}"; do
-  if "${VIRSH[@]}" nodedev-detach "$node"; then
-    detached+=("$node")
-  else
-    echo "osx-kvm: failed to detach $node; rolling back" >&2
-    for rollback in "${detached[@]}"; do
-      "${VIRSH[@]}" nodedev-reattach "$rollback" || true
-    done
-    /usr/bin/systemctl start sddm.service || true
-    exit 1
-  fi
-done
-
-/usr/bin/udevadm settle
-echo "osx-kvm: RX 5600 detached; starting macOS" >&2
+echo "osx-kvm: SDDM stopped; libvirt will detach the RX 5600 and USB controller" >&2
