@@ -12,6 +12,21 @@ The two devices are detached and reattached by libvirt hooks. SDDM is stopped
 before the handoff and restarted after the VM exits. Linux is expected to be
 headless while macOS owns the physical GPU.
 
+## Performance choices
+
+The VM uses 16 pinned vCPUs across eight physical cores with their SMT
+siblings paired correctly. QEMU and the disk I/O thread stay on the remaining
+physical core. Its 24 GiB are allocated immediately, and the persistent disk
+uses `cache='none'`, native I/O, and a dedicated I/O thread.
+
+The macOS disks remain SATA devices for OSX-KVM compatibility, so virtio
+storage multi-queue is intentionally not enabled. The host has one NUMA node,
+so vNUMA configuration would not add anything. Hugepages are also left out
+until they are explicitly reserved on the host.
+
+Hyper-V enlightenments such as `hv-no-nonarch-coresharing` are not enabled;
+they target Windows guests and are not appropriate tuning for this macOS VM.
+
 ## One-time setup
 
 Run as the normal user:

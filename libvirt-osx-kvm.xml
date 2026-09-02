@@ -6,10 +6,33 @@
   <currentMemory unit='MiB'>24576</currentMemory>
   <memoryBacking>
     <nosharepages/>
+    <allocation mode='immediate' threads='4'/>
   </memoryBacking>
 
   <vcpu placement='static'>16</vcpu>
   <iothreads>1</iothreads>
+  <cputune>
+    <!-- Pair each guest SMT thread with the matching host sibling. -->
+    <vcpupin vcpu='0' cpuset='0'/>
+    <vcpupin vcpu='1' cpuset='14'/>
+    <vcpupin vcpu='2' cpuset='1'/>
+    <vcpupin vcpu='3' cpuset='15'/>
+    <vcpupin vcpu='4' cpuset='2'/>
+    <vcpupin vcpu='5' cpuset='16'/>
+    <vcpupin vcpu='6' cpuset='3'/>
+    <vcpupin vcpu='7' cpuset='17'/>
+    <vcpupin vcpu='8' cpuset='4'/>
+    <vcpupin vcpu='9' cpuset='18'/>
+    <vcpupin vcpu='10' cpuset='5'/>
+    <vcpupin vcpu='11' cpuset='19'/>
+    <vcpupin vcpu='12' cpuset='6'/>
+    <vcpupin vcpu='13' cpuset='20'/>
+    <vcpupin vcpu='14' cpuset='7'/>
+    <vcpupin vcpu='15' cpuset='21'/>
+    <!-- Keep host-side QEMU work on the remaining physical core. -->
+    <emulatorpin cpuset='13,27'/>
+    <iothreadpin iothread='1' cpuset='13,27'/>
+  </cputune>
   <cpu mode='custom' match='exact' check='none'>
     <model fallback='allow'>Skylake-Client</model>
     <vendor>GenuineIntel</vendor>
