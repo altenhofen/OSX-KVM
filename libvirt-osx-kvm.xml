@@ -99,20 +99,21 @@
       <source>
         <address domain='0x0000' bus='0x09' slot='0x00' function='0x0'/>
       </source>
-      <address type='pci' domain='0x0000' bus='0x01' slot='0x00' function='0x0'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x04' function='0x0' multifunction='on'/>
     </hostdev>
     <hostdev mode='subsystem' type='pci' managed='yes'>
       <driver name='vfio'/>
       <source>
         <address domain='0x0000' bus='0x09' slot='0x00' function='0x1'/>
       </source>
-      <address type='pci' domain='0x0000' bus='0x01' slot='0x00' function='0x1'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x04' function='0x1'/>
     </hostdev>
     <hostdev mode='subsystem' type='pci' managed='yes'>
       <driver name='vfio'/>
       <source>
         <address domain='0x0000' bus='0x00' slot='0x14' function='0x0'/>
       </source>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x07' function='0x0'/>
     </hostdev>
 
     <memballoon model='none'/>
@@ -123,5 +124,7 @@
     <qemu:arg value='isa-applesmc,osk=ourhardworkbythesewordsguardedpleasedontsteal(c)AppleComputerInc'/>
     <qemu:arg value='-smbios'/>
     <qemu:arg value='type=2'/>
+    <qemu:arg value='-global'/>
+    <qemu:arg value='ICH9-LPC.acpi-pci-hotplug-with-bridge-support=off'/>
   </qemu:commandline>
 </domain>

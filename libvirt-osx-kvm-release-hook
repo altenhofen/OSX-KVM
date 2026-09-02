@@ -8,5 +8,29 @@ if [[ "${1:-}" != "osx-kvm" || "${2:-}" != "release" || "${3:-}" != "end" ]]; th
   exit 0
 fi
 
-echo "osx-kvm: managed devices reattached; restarting SDDM" >&2
-/usr/bin/systemctl start sddm.service || true
+readonly GPU_PCI='0000:09:00.0'
+
+# libvirt has released the host device before this hook runs, but amdgpu may
+# still be posting the card and recreating its DRM connectors. Starting SDDM
+# before that finishes can leave Omarchy without a usable Hyprland session.
+gpu_driver=''
+for _ in {1..80}; do
+  gpu_driver=$(
+    /usr/bin/basename \
+      "$(/usr/bin/readlink -f "/sys/bus/pci/devices/$GPU_PCI/driver" 2>/dev/null || true)"
+  )
+  [[ "$gpu_driver" == 'amdgpu' ]] && break
+  /usr/bin/sleep 0.25
+done
+
+/usr/bin/udevadm settle --timeout=15 || true
+
+if [[ "$gpu_driver" != 'amdgpu' ]]; then
+  echo "osx-kvm: warning: $GPU_PCI driver is '$gpu_driver' before SDDM restart" >&2
+else
+  echo "osx-kvm: $GPU_PCI is ready on amdgpu; restarting SDDM" >&2
+fi
+
+# restart also repairs a display-manager unit that remained active while its
+# graphical session died during the GPU handoff.
+/usr/bin/systemctl restart sddm.service || true
