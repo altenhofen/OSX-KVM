@@ -9,11 +9,19 @@ readonly XML_FILE="$REPO_DIR/libvirt-osx-kvm.xml"
 readonly PREPARE_HOOK="$REPO_DIR/libvirt-osx-kvm-prepare-hook"
 readonly RELEASE_HOOK="$REPO_DIR/libvirt-osx-kvm-release-hook"
 readonly DOMAIN_NAME=osx-kvm
+TEMP_XML=
 
 die() {
   printf 'error: %s\n' "$*" >&2
   exit 1
 }
+
+cleanup() {
+  if [[ -n "${TEMP_XML:-}" && -e "$TEMP_XML" ]]; then
+    rm -f -- "$TEMP_XML"
+  fi
+}
+trap cleanup EXIT
 
 [[ ${EUID} -ne 0 ]] || die 'run this as your normal user; it invokes sudo'
 [[ -d "$REPO_DIR/.git" ]] || die "repository not found at $REPO_DIR"
@@ -41,7 +49,23 @@ sudo install -Dm755 "$PREPARE_HOOK" \
   /etc/libvirt/hooks/qemu.d/$DOMAIN_NAME/prepare/begin
 sudo install -Dm755 "$RELEASE_HOOK" \
   /etc/libvirt/hooks/qemu.d/$DOMAIN_NAME/release/end
-sudo virsh -c qemu:///system define "$XML_FILE"
+
+# A first define gives libvirt a UUID. Preserve it when redefining the
+# existing domain, otherwise libvirt interprets the XML as a second domain
+# with the same name and rejects it. The source XML remains portable and is
+# not modified.
+existing_uuid=$(sudo virsh -c qemu:///system domuuid "$DOMAIN_NAME" 2>/dev/null || true)
+if [[ -n "$existing_uuid" ]]; then
+  existing_state=$(sudo virsh -c qemu:///system domstate "$DOMAIN_NAME" 2>/dev/null || true)
+  [[ "$existing_state" == 'shut off' ]] ||
+    die "domain $DOMAIN_NAME is not shut off; shut it down before updating its definition"
+  TEMP_XML=$(mktemp)
+  sed "/<name>${DOMAIN_NAME}<\/name>/a\\  <uuid>${existing_uuid}<\/uuid>" \
+    "$XML_FILE" > "$TEMP_XML"
+  sudo virsh -c qemu:///system define "$TEMP_XML"
+else
+  sudo virsh -c qemu:///system define "$XML_FILE"
+fi
 
 printf 'Defined libvirt domain: %s\n' "$DOMAIN_NAME"
 printf 'It is not running. Its hooks will stop SDDM before handoff and restart it after shutdown.\n'
