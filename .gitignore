@@ -2,6 +2,7 @@
 *.dmg
 *.img
 *.qcow2
+*.qcow2.*
 *.iso
 *.pkg
 *.sha256sum
