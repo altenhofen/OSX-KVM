@@ -8,11 +8,12 @@ readonly REPO_DIR=${OSX_KVM_REPO:-"$HOME/OSX-KVM"}
 readonly XML_FILE="$REPO_DIR/libvirt-osx-kvm.xml"
 readonly PREPARE_HOOK="$REPO_DIR/libvirt-osx-kvm-prepare-hook"
 readonly RELEASE_HOOK="$REPO_DIR/libvirt-osx-kvm-release-hook"
+readonly QEMU_HOOK_DISPATCHER="$REPO_DIR/libvirt-qemu-hook-dispatcher"
 readonly DOMAIN_NAME=osx-kvm
 readonly HOOK_DIR=/etc/libvirt/hooks/qemu.d
-readonly PREPARE_HOOK_PATH="$HOOK_DIR/90-osx-kvm-prepare"
-readonly RELEASE_HOOK_PATH="$HOOK_DIR/91-osx-kvm-release"
-readonly LEGACY_HOOK_DIR="$HOOK_DIR/$DOMAIN_NAME"
+readonly QEMU_HOOK_PATH=/etc/libvirt/hooks/qemu
+readonly PREPARE_HOOK_PATH="$HOOK_DIR/$DOMAIN_NAME/prepare/begin/10-osx-kvm-prepare"
+readonly RELEASE_HOOK_PATH="$HOOK_DIR/$DOMAIN_NAME/release/end/10-osx-kvm-release"
 readonly QEMU_CONFIG=/etc/libvirt/qemu.conf
 TEMP_XML=
 QEMU_UID=
@@ -34,6 +35,7 @@ trap cleanup EXIT
 [[ -r "$XML_FILE" ]] || die "missing $XML_FILE"
 [[ -x "$PREPARE_HOOK" ]] || die "missing executable $PREPARE_HOOK"
 [[ -x "$RELEASE_HOOK" ]] || die "missing executable $RELEASE_HOOK"
+[[ -x "$QEMU_HOOK_DISPATCHER" ]] || die "missing executable $QEMU_HOOK_DISPATCHER"
 command -v sudo >/dev/null || die 'sudo is required'
 command -v virsh >/dev/null || die 'libvirt/virsh is required'
 command -v setfacl >/dev/null || die 'setfacl is required; install the Arch acl package first with: omarchy pkg add acl'
@@ -61,16 +63,14 @@ fi
 
 sudo -v
 
-# qemu.d contains flat executable hook scripts. The old nested layout was
-# interpreted by libvirt as a non-executable hook named "osx-kvm".
+# Libvirt invokes /etc/libvirt/hooks/qemu. This dispatcher selects the
+# per-domain operation/state scripts from qemu.d.
 sudo install -d -m755 "$HOOK_DIR"
+sudo install -Dm755 "$QEMU_HOOK_DISPATCHER" "$QEMU_HOOK_PATH"
 sudo install -Dm755 "$PREPARE_HOOK" "$PREPARE_HOOK_PATH"
 sudo install -Dm755 "$RELEASE_HOOK" "$RELEASE_HOOK_PATH"
-if [[ -d "$LEGACY_HOOK_DIR" ]]; then
-  sudo rm -f -- "$LEGACY_HOOK_DIR/prepare/begin" "$LEGACY_HOOK_DIR/release/end"
-  sudo rmdir --ignore-fail-on-non-empty \
-    "$LEGACY_HOOK_DIR/prepare" "$LEGACY_HOOK_DIR/release" "$LEGACY_HOOK_DIR" || true
-fi
+# Remove the previous unsupported flat hook files, if present.
+sudo rm -f -- "$HOOK_DIR/90-osx-kvm-prepare" "$HOOK_DIR/91-osx-kvm-release"
 
 if sudo systemctl is-active --quiet libvirtd.service; then
   # libvirt reads qemu.d only when its daemon starts.

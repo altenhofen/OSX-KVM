@@ -10,6 +10,7 @@ if [[ "${1:-}" != "osx-kvm" || "${2:-}" != "prepare" || "${3:-}" != "begin" ]]; 
 fi
 
 echo "osx-kvm: stopping SDDM before RX 5600 handoff" >&2
+/usr/bin/logger -t osx-kvm-prepare -- 'stopping SDDM before RX 5600 handoff'
 /usr/bin/systemctl stop sddm.service
 
 # SDDM stopping the display manager normally ends Hyprland. Wait for all
@@ -35,4 +36,15 @@ for proc in Hyprland sddm sddm-helper start-hyprland; do
 done
 
 /usr/bin/modprobe vfio-pci
+
+# Release the firmware framebuffer and text consoles while the host GPU is
+# detached. These are restored by the release hook before SDDM is restarted.
+for console in /sys/class/vtconsole/vtcon*; do
+  [[ -e "$console/bind" ]] && echo 0 > "$console/bind" || true
+done
+if [[ -e /sys/bus/platform/drivers/efi-framebuffer/efi-framebuffer.0 ]]; then
+  echo efi-framebuffer.0 > /sys/bus/platform/drivers/efi-framebuffer/unbind || true
+fi
+
 echo "osx-kvm: SDDM stopped; libvirt will detach the RX 5600 and USB controller" >&2
+/usr/bin/logger -t osx-kvm-prepare -- 'SDDM stopped; libvirt will detach host devices'

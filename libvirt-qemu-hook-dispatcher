@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Dispatcher required by libvirt for per-domain QEMU lifecycle hooks.
+# It runs the executable scripts for the exact domain/operation/state tuple.
+set -Eeuo pipefail
+
+domain=${1:-}
+operation=${2:-}
+state=${3:-}
+
+# These values are supplied by libvirt. Reject path characters defensively
+# before using them to construct a hook directory.
+for value in "$domain" "$operation" "$state"; do
+  [[ "$value" =~ ^[A-Za-z0-9_.-]+$ ]] || exit 0
+done
+
+hook_dir="/etc/libvirt/hooks/qemu.d/$domain/$operation/$state"
+[[ -d "$hook_dir" ]] || exit 0
+
+for hook in "$hook_dir"/*; do
+  [[ -f "$hook" && -x "$hook" ]] || continue
+  "$hook" "$@"
+done

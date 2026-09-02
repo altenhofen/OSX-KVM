@@ -15,9 +15,10 @@ die() {
 command -v virsh >/dev/null || die 'libvirt/virsh is required'
 command -v pgrep >/dev/null || die 'procps/pgrep is required'
 
-readonly PREPARE_HOOK=/etc/libvirt/hooks/qemu.d/90-osx-kvm-prepare
-readonly RELEASE_HOOK=/etc/libvirt/hooks/qemu.d/91-osx-kvm-release
-[[ -x "$PREPARE_HOOK" && -x "$RELEASE_HOOK" ]] ||
+readonly QEMU_HOOK=/etc/libvirt/hooks/qemu
+readonly PREPARE_HOOK=/etc/libvirt/hooks/qemu.d/osx-kvm/prepare/begin/10-osx-kvm-prepare
+readonly RELEASE_HOOK=/etc/libvirt/hooks/qemu.d/osx-kvm/release/end/10-osx-kvm-release
+[[ -x "$QEMU_HOOK" && -x "$PREPARE_HOOK" && -x "$RELEASE_HOOK" ]] ||
   die 'automatic lifecycle hooks are not installed; run install-osx-kvm-libvirt first'
 
 graphical_session=0

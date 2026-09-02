@@ -1,36 +1,69 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# libvirt calls this qemu.d script as: qemu osx-kvm release end
-# libvirt reattaches managed host devices before this hook runs.
+# libvirt calls this qemu.d script as: qemu osx-kvm release end.
+# It normally reattaches managed host devices before this hook runs, but a
+# QEMU/VFIO failure can leave one behind on vfio-pci.  Repair that condition
+# here before bringing the graphical session back.
 
 if [[ "${1:-}" != "osx-kvm" || "${2:-}" != "release" || "${3:-}" != "end" ]]; then
   exit 0
 fi
 
 readonly GPU_PCI='0000:09:00.0'
+readonly USB_PCI='0000:00:14.0'
 
-# libvirt has released the host device before this hook runs, but amdgpu may
-# still be posting the card and recreating its DRM connectors. Starting SDDM
-# before that finishes can leave Omarchy without a usable Hyprland session.
+log() {
+  /usr/bin/logger -t osx-kvm-release -- "$*"
+  echo "osx-kvm: $*" >&2
+}
+
+reattach() {
+  local node_name=$1
+  # A successfully released device is already attached, which makes virsh
+  # return an error.  That is harmless; continue and check its driver below.
+  /usr/bin/virsh -c qemu:///system nodedev-reattach "$node_name" >/dev/null 2>&1 || true
+}
+
+log 'restoring host PCI devices and graphical session'
+reattach pci_0000_09_00_0
+reattach pci_0000_09_00_1
+reattach pci_0000_00_14_0
+
+/usr/bin/modprobe amdgpu || true
+/usr/bin/modprobe snd_hda_intel || true
+/usr/bin/modprobe xhci_pci || true
+
+# Restore the firmware framebuffer and text consoles before SDDM asks
+# Hyprland to create a graphical session. These are harmless no-ops on hosts
+# without EFI framebuffer support.
+if [[ -e /sys/bus/platform/drivers/efi-framebuffer/bind ]]; then
+  echo efi-framebuffer.0 > /sys/bus/platform/drivers/efi-framebuffer/bind || true
+fi
+for console in /sys/class/vtconsole/vtcon*; do
+  [[ -e "$console/bind" ]] && echo 1 > "$console/bind" || true
+done
+
+# Give the host drivers time to bind and for amdgpu to recreate its DRM
+# connectors.  SDDM/Hyprland must not be started before this completes.
 gpu_driver=''
-for _ in {1..80}; do
-  gpu_driver=$(
-    /usr/bin/basename \
-      "$(/usr/bin/readlink -f "/sys/bus/pci/devices/$GPU_PCI/driver" 2>/dev/null || true)"
-  )
-  [[ "$gpu_driver" == 'amdgpu' ]] && break
+usb_driver=''
+for _ in {1..240}; do
+  gpu_driver=$(/usr/bin/basename "$(/usr/bin/readlink -f "/sys/bus/pci/devices/$GPU_PCI/driver" 2>/dev/null || true)")
+  usb_driver=$(/usr/bin/basename "$(/usr/bin/readlink -f "/sys/bus/pci/devices/$USB_PCI/driver" 2>/dev/null || true)")
+  [[ "$gpu_driver" == 'amdgpu' && "$usb_driver" == 'xhci_hcd' ]] && break
   /usr/bin/sleep 0.25
 done
 
-/usr/bin/udevadm settle --timeout=15 || true
+/usr/bin/udevadm settle --timeout=30 || true
 
-if [[ "$gpu_driver" != 'amdgpu' ]]; then
-  echo "osx-kvm: warning: $GPU_PCI driver is '$gpu_driver' before SDDM restart" >&2
+if [[ "$gpu_driver" != 'amdgpu' || "$usb_driver" != 'xhci_hcd' ]]; then
+  log "warning: drivers before SDDM restart: GPU=$gpu_driver USB=$usb_driver"
 else
-  echo "osx-kvm: $GPU_PCI is ready on amdgpu; restarting SDDM" >&2
+  log 'host drivers are ready; restarting SDDM'
 fi
 
 # restart also repairs a display-manager unit that remained active while its
 # graphical session died during the GPU handoff.
-/usr/bin/systemctl restart sddm.service || true
+/usr/bin/systemctl reset-failed sddm.service || true
+/usr/bin/systemctl restart sddm.service || log 'failed to restart SDDM'
