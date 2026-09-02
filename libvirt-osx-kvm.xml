@@ -68,7 +68,7 @@
     <emulator>/usr/bin/qemu-system-x86_64</emulator>
 
     <controller type='sata' index='0'/>
-    <!-- Physical host USB controller is passed through below. -->
+    <!-- USB controller 00:14.0 is passed through below. -->
     <controller type='usb' index='0' model='none'/>
 
     <disk type='file' device='disk'>

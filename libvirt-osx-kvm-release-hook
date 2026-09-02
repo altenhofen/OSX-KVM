@@ -2,68 +2,22 @@
 set -Eeuo pipefail
 
 # libvirt calls this qemu.d script as: qemu osx-kvm release end.
-# It normally reattaches managed host devices before this hook runs, but a
-# QEMU/VFIO failure can leave one behind on vfio-pci.  Repair that condition
-# here before bringing the graphical session back.
+# Libvirt has completed the managed-device release phase before this hook
+# runs. The X99 USB controller has no VFIO reset path, so this host is
+# configured to power off instead of attempting to restore a graphical
+# session after the macOS VM stops.
 
 if [[ "${1:-}" != "osx-kvm" || "${2:-}" != "release" || "${3:-}" != "end" ]]; then
   exit 0
 fi
-
-readonly GPU_PCI='0000:09:00.0'
-readonly USB_PCI='0000:00:14.0'
 
 log() {
   /usr/bin/logger -t osx-kvm-release -- "$*"
   echo "osx-kvm: $*" >&2
 }
 
-reattach() {
-  local node_name=$1
-  # A successfully released device is already attached, which makes virsh
-  # return an error.  That is harmless; continue and check its driver below.
-  /usr/bin/virsh -c qemu:///system nodedev-reattach "$node_name" >/dev/null 2>&1 || true
-}
+log 'macOS VM released; requesting clean host poweroff (X99 USB reset workaround)'
 
-log 'restoring host PCI devices and graphical session'
-reattach pci_0000_09_00_0
-reattach pci_0000_09_00_1
-reattach pci_0000_00_14_0
-
-/usr/bin/modprobe amdgpu || true
-/usr/bin/modprobe snd_hda_intel || true
-/usr/bin/modprobe xhci_pci || true
-
-# Restore the firmware framebuffer and text consoles before SDDM asks
-# Hyprland to create a graphical session. These are harmless no-ops on hosts
-# without EFI framebuffer support.
-if [[ -e /sys/bus/platform/drivers/efi-framebuffer/bind ]]; then
-  echo efi-framebuffer.0 > /sys/bus/platform/drivers/efi-framebuffer/bind || true
-fi
-for console in /sys/class/vtconsole/vtcon*; do
-  [[ -e "$console/bind" ]] && echo 1 > "$console/bind" || true
-done
-
-# Give the host drivers time to bind and for amdgpu to recreate its DRM
-# connectors.  SDDM/Hyprland must not be started before this completes.
-gpu_driver=''
-usb_driver=''
-for _ in {1..240}; do
-  gpu_driver=$(/usr/bin/basename "$(/usr/bin/readlink -f "/sys/bus/pci/devices/$GPU_PCI/driver" 2>/dev/null || true)")
-  usb_driver=$(/usr/bin/basename "$(/usr/bin/readlink -f "/sys/bus/pci/devices/$USB_PCI/driver" 2>/dev/null || true)")
-  [[ "$gpu_driver" == 'amdgpu' && "$usb_driver" == 'xhci_hcd' ]] && break
-  /usr/bin/sleep 0.25
-done
-
-/usr/bin/udevadm settle --timeout=30 || true
-
-if [[ "$gpu_driver" != 'amdgpu' || "$usb_driver" != 'xhci_hcd' ]]; then
-  log "warning: drivers before SDDM restart: GPU=$gpu_driver USB=$usb_driver"
-else
-  log 'host drivers are ready; restarting SDDM'
-fi
-
-# restart also repairs a display-manager unit that remained active while its
-# graphical session died during the GPU handoff.
-/usr/bin/systemctl reset-failed sddm.service || true
-/usr/bin/systemctl restart sddm.service || log 'failed to restart SDDM'
+# systemctl queues the shutdown job and returns, allowing libvirt's hook to
+# finish before systemd stops libvirtd and powers the machine down.
+/usr/bin/systemctl poweroff --no-wall || log 'failed to queue host poweroff'
