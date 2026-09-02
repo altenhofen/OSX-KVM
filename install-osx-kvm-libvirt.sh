@@ -57,6 +57,13 @@ else
   sudo systemctl enable --now libvirtd.service
 fi
 
+sudo virsh -c qemu:///system net-info default >/dev/null 2>&1 ||
+  die "libvirt network 'default' is not defined"
+sudo virsh -c qemu:///system net-autostart default >/dev/null
+if ! sudo virsh -c qemu:///system net-list --name | grep -Fxq default; then
+  sudo virsh -c qemu:///system net-start default
+fi
+
 # System libvirt runs QEMU as qemu. Grant it only the traversal/read/write
 # access needed for these existing VM files; no files are copied or removed.
 sudo setfacl -m u:qemu:--x "$HOME"

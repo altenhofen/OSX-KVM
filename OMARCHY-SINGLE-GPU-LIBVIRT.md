@@ -44,7 +44,8 @@ prepare-osx-kvm
 install-osx-kvm-libvirt
 ```
 
-The installer defines the `osx-kvm` domain but does not start it.
+The installer enables and starts libvirt's `default` NAT network, then defines
+the `osx-kvm` domain but does not start the VM.
 
 ## Start and stop
 
