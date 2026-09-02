@@ -10,7 +10,6 @@
   </memoryBacking>
 
   <vcpu placement='static'>16</vcpu>
-  <iothreads>1</iothreads>
   <cputune>
     <!-- Pair each guest SMT thread with the matching host sibling. -->
     <vcpupin vcpu='0' cpuset='0'/>
@@ -31,7 +30,6 @@
     <vcpupin vcpu='15' cpuset='21'/>
     <!-- Keep host-side QEMU work on the remaining physical core. -->
     <emulatorpin cpuset='13,27'/>
-    <iothreadpin iothread='1' cpuset='13,27'/>
   </cputune>
   <cpu mode='custom' match='exact' check='none'>
     <model fallback='allow'>Skylake-Client</model>
@@ -73,13 +71,13 @@
     <controller type='usb' index='0' model='qemu-xhci' ports='15'/>
 
     <disk type='file' device='disk'>
-      <driver name='qemu' type='qcow2' cache='none' io='native' iothread='1'/>
+      <driver name='qemu' type='qcow2' cache='none' io='native'/>
       <source file='/home/altenhofen/OSX-KVM/OpenCore/OpenCore.qcow2'/>
       <target dev='sda' bus='sata'/>
       <address type='drive' controller='0' bus='0' unit='2'/>
     </disk>
     <disk type='file' device='disk'>
-      <driver name='qemu' type='qcow2' cache='none' io='native' iothread='1'/>
+      <driver name='qemu' type='qcow2' cache='none' io='native'/>
       <source file='/home/altenhofen/OSX-KVM/mac_hdd_ng.img'/>
       <target dev='sdb' bus='sata'/>
       <address type='drive' controller='0' bus='0' unit='4'/>

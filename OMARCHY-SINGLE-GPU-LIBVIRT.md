@@ -15,14 +15,16 @@ headless while macOS owns the physical GPU.
 ## Performance choices
 
 The VM uses 16 pinned vCPUs across eight physical cores with their SMT
-siblings paired correctly. QEMU and the disk I/O thread stay on the remaining
-physical core. Its 24 GiB are allocated immediately, and the persistent disk
-uses `cache='none'`, native I/O, and a dedicated I/O thread.
+siblings paired correctly. QEMU stays on the remaining physical core. Its 24
+GiB are allocated immediately, and the persistent disk uses `cache='none'` and
+native I/O.
 
-The macOS disks remain SATA devices for OSX-KVM compatibility, so virtio
-storage multi-queue is intentionally not enabled. The host has one NUMA node,
-so vNUMA configuration would not add anything. Hugepages are also left out
-until they are explicitly reserved on the host.
+The macOS disks remain SATA devices for OSX-KVM compatibility. This
+libvirt/QEMU combination does not support IOThreads or virtio storage
+multi-queue on those SATA targets, so those options are intentionally not
+enabled. The host has one NUMA node, so vNUMA configuration would not add
+anything. Hugepages are also left out until they are explicitly reserved on
+the host.
 
 Hyper-V enlightenments such as `hv-no-nonarch-coresharing` are not enabled;
 they target Windows guests and are not appropriate tuning for this macOS VM.
