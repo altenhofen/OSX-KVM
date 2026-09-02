@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+# libvirt calls this as: qemu osx-kvm release end
+# Reattach both PCI functions before bringing the Linux desktop back.
+
+if [[ "${1:-}" != "osx-kvm" || "${2:-}" != "release" || "${3:-}" != "end" ]]; then
+  exit 0
+fi
+
+readonly VIRSH=(/usr/bin/virsh -c qemu:///system)
+readonly NODES=(pci_0000_09_00_0 pci_0000_09_00_1)
+
+echo "osx-kvm: reattaching RX 5600 to Linux" >&2
+for node in "${NODES[@]}"; do
+  "${VIRSH[@]}" nodedev-reattach "$node" || true
+done
+
+/usr/bin/udevadm settle
+/usr/bin/sleep 1
+echo "osx-kvm: restarting SDDM" >&2
+/usr/bin/systemctl start sddm.service || true

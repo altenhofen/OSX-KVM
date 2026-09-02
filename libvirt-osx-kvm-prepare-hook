@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+# Automatic single-GPU handoff for the osx-kvm domain.
+# libvirt calls this as: qemu osx-kvm prepare begin
+# This intentionally affects only the VM named osx-kvm.
+
+if [[ "${1:-}" != "osx-kvm" || "${2:-}" != "prepare" || "${3:-}" != "begin" ]]; then
+  exit 0
+fi
+
+readonly VIRSH=(/usr/bin/virsh -c qemu:///system)
+readonly NODES=(pci_0000_09_00_0 pci_0000_09_00_1)
+
+echo "osx-kvm: stopping SDDM before RX 5600 handoff" >&2
+/usr/bin/systemctl stop sddm.service
+
+# SDDM stopping the display manager normally ends Hyprland. Wait for all
+# known Omarchy graphical-session processes before touching the PCI devices.
+for _ in {1..40}; do
+  graphical_process=0
+  for proc in Hyprland sddm sddm-helper start-hyprland; do
+    if /usr/bin/pgrep -x "$proc" >/dev/null 2>&1; then
+      graphical_process=1
+      break
+    fi
+  done
+  [[ $graphical_process -eq 0 ]] && break
+  /usr/bin/sleep 0.25
+done
+
+for proc in Hyprland sddm sddm-helper start-hyprland; do
+  if /usr/bin/pgrep -x "$proc" >/dev/null 2>&1; then
+    echo "osx-kvm: $proc did not exit; aborting GPU handoff" >&2
+    /usr/bin/systemctl start sddm.service || true
+    exit 1
+  fi
+done
+
+/usr/bin/modprobe vfio-pci
+detached=()
+for node in "${NODES[@]}"; do
+  if "${VIRSH[@]}" nodedev-detach "$node"; then
+    detached+=("$node")
+  else
+    echo "osx-kvm: failed to detach $node; rolling back" >&2
+    for rollback in "${detached[@]}"; do
+      "${VIRSH[@]}" nodedev-reattach "$rollback" || true
+    done
+    /usr/bin/systemctl start sddm.service || true
+    exit 1
+  fi
+done
+
+/usr/bin/udevadm settle
+echo "osx-kvm: RX 5600 detached; starting macOS" >&2
