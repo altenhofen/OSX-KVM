@@ -10,7 +10,7 @@ if [[ "${1:-}" != "osx-kvm" || "${2:-}" != "prepare" || "${3:-}" != "begin" ]]; 
 fi
 
 readonly VIRSH=(/usr/bin/virsh -c qemu:///system)
-readonly NODES=(pci_0000_09_00_0 pci_0000_09_00_1)
+readonly NODES=(pci_0000_09_00_0 pci_0000_09_00_1 pci_0000_00_14_0)
 
 echo "osx-kvm: stopping SDDM before RX 5600 handoff" >&2
 /usr/bin/systemctl stop sddm.service

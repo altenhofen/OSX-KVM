@@ -68,7 +68,8 @@
     <emulator>/usr/bin/qemu-system-x86_64</emulator>
 
     <controller type='sata' index='0'/>
-    <controller type='usb' index='0' model='qemu-xhci' ports='15'/>
+    <!-- Physical host USB controller is passed through below. -->
+    <controller type='usb' index='0' model='none'/>
 
     <disk type='file' device='disk'>
       <driver name='qemu' type='qcow2' cache='none' io='native'/>
@@ -89,9 +90,6 @@
       <model type='virtio'/>
     </interface>
 
-    <input type='keyboard' bus='usb'/>
-    <input type='tablet' bus='usb'/>
-
     <video>
       <model type='none'/>
     </video>
@@ -109,6 +107,12 @@
         <address domain='0x0000' bus='0x09' slot='0x00' function='0x1'/>
       </source>
       <address type='pci' domain='0x0000' bus='0x01' slot='0x00' function='0x1'/>
+    </hostdev>
+    <hostdev mode='subsystem' type='pci' managed='no'>
+      <driver name='vfio'/>
+      <source>
+        <address domain='0x0000' bus='0x00' slot='0x14' function='0x0'/>
+      </source>
     </hostdev>
 
     <memballoon model='none'/>

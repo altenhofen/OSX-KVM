@@ -7,10 +7,16 @@ Host devices:
 
 - RX 5600: `0000:09:00.0`
 - HDMI audio: `0000:09:00.1`
+- USB 3 controller: `0000:00:14.0` (IOMMU group 42)
 
 The two devices are detached and reattached by libvirt hooks. SDDM is stopped
 before the handoff and restarted after the VM exits. Linux is expected to be
-headless while macOS owns the physical GPU.
+headless while macOS owns the physical GPU. The physical USB 3 controller is
+also assigned, so its attached keyboard, mouse, wireless receiver, USB audio,
+and microphone devices belong to macOS while the VM runs.
+
+Linux will not have access to those USB ports during the VM run. Use SSH for
+host control and recovery.
 
 ## Performance choices
 
